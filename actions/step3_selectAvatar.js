@@ -80,31 +80,74 @@ window.heygenActions.waitForAvatarRowButton = async function(timeout = 6000) {
   throw new Error('未在右侧面板中找到 Avatar 头像属性按钮，请确保场景已被选中。');
 };
 
-// 辅助方法：根据 rowIndex 获取头像库中对应的头像卡片元素 (rowIndex=0 对应卡片1, 依次类推)
+// 辅助方法：根据 rowIndex 获取头像库中对应的头像卡片元素
 window.heygenActions.findAvatarCardByIndex = function(rowIndex) {
   // 1. 寻找头像库面板容器
   let drawerContainer = null;
-  const buttons = document.querySelectorAll('button');
-  for (const btn of buttons) {
-    if (btn.textContent && (btn.textContent.includes('Design with AI') || btn.textContent.includes('Upload look'))) {
-      drawerContainer = btn.closest('div[style*="1380px"]') || btn.closest('div[style*="1380"]') || btn.closest('.tw-relative.tw-size-full');
-      if (drawerContainer) break;
+  
+  // 1.1. 优先通过 SceneAvatarSwitcherHeader 头部组件向上定位
+  const headerBtn = document.querySelector('[data-pacific-component="SceneAvatarSwitcherHeader"]');
+  if (headerBtn) {
+    let current = headerBtn.parentElement;
+    while (current && current !== document.body) {
+      const style = current.getAttribute('style') || '';
+      if (style.includes('1380px') || style.includes('1380') || current.classList.contains('tw-relative')) {
+        drawerContainer = current;
+        break;
+      }
+      current = current.parentElement;
+    }
+    if (!drawerContainer) {
+      drawerContainer = headerBtn.closest('.tw-relative') || headerBtn.parentElement?.parentElement;
     }
   }
   
+  // 1.2. 备用：通过“Design with AI”按钮定位
+  if (!drawerContainer) {
+    const buttons = document.querySelectorAll('button');
+    for (const btn of buttons) {
+      if (btn.textContent && (btn.textContent.includes('Design with AI') || btn.textContent.includes('Upload look'))) {
+        drawerContainer = btn.closest('div[style*="1380px"]') || btn.closest('div[style*="1380"]') || btn.closest('.tw-relative.tw-size-full');
+        if (drawerContainer) break;
+      }
+    }
+  }
+  
+  // 1.3. 再次备用：全局直接找 1380px 的容器
   if (!drawerContainer) {
     drawerContainer = document.querySelector('div[style*="1380px"], div[style*="1380"]');
   }
   
   if (!drawerContainer) return null;
   
-  // 2. 找到该容器下第一层所有的绝对定位卡片
-  const cards = Array.from(drawerContainer.querySelectorAll('div.tw-absolute')).filter(div => {
-    // 确保是第一级卡片（其直接父元素是 drawerContainer 且带有宽高样式）
-    return div.parentElement === drawerContainer && div.style.width && div.style.height;
+  // 2. 找到该容器下所有的绝对定位卡片
+  const allAbsoluteDivs = drawerContainer.querySelectorAll('div.tw-absolute');
+  const allCards = Array.from(allAbsoluteDivs).filter(div => {
+    // 过滤出那些带有 width 和 height 样式的真正头像元素卡片
+    return div.style.width && div.style.height;
   });
   
-  console.log(`[HeyGen Automation] 找到头像库中的卡片数量: ${cards.length}`);
+  // 3. 对卡片按照 parentElement 进行分组，找到包含最多卡片的那个父级容器作为主网格，防止 DOM 结构变动或多层嵌套带来的判断偏差
+  const cardGroups = new Map();
+  for (const card of allCards) {
+    const parent = card.parentElement;
+    if (!cardGroups.has(parent)) {
+      cardGroups.set(parent, []);
+    }
+    cardGroups.get(parent).push(card);
+  }
+  
+  let bestParent = null;
+  let maxCount = 0;
+  for (const [parent, group] of cardGroups.entries()) {
+    if (group.length > maxCount) {
+      maxCount = group.length;
+      bestParent = parent;
+    }
+  }
+  
+  const cards = bestParent ? cardGroups.get(bestParent) : [];
+  console.log(`[HeyGen Automation] 成功在头像抽屉内锁定网格容器，包含卡片数量: ${cards.length}`);
   
   // 正常顺序索引应该为 rowIndex + 1 (因为第 0 个是 Design with AI 等按钮，第 1 个是首行手选的头像)
   const targetIndex = rowIndex + 1;
