@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "HeyGen 自动操作助手",
+  "version": "1.0",
+  "description": "针对 app.heygen.com 的自动化点击与输入插件，支持谷歌表格数据解析。",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://app.heygen.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "HeyGen 助手"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://app.heygen.com/*"],
+      "js": [
+        "actions/actions_base.js",
+        "actions/step1_addScenes.js",
+        "actions/step2_fillScripts.js",
+        "actions/step3_selectAvatar.js",
+        "content.js"
+      ],
+      "run_at": "document_end"
+    }
+  ]
+}

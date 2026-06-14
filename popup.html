@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HeyGen 自动操作助手</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- 头部栏 -->
+    <header class="app-header">
+      <div class="logo-container">
+        <div class="logo-icon"></div>
+        <div class="logo-text">
+          <h1>HeyGen <span>Automation</span></h1>
+          <p>网页点击与自动填表助手</p>
+        </div>
+      </div>
+      <div class="status-badge" id="statusBadge">
+        <span class="status-dot"></span>
+        <span class="status-text" id="statusText">未就绪</span>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <!-- 选项卡按钮 -->
+      <div class="tab-buttons">
+        <button class="tab-btn active" id="tabImportBtn" data-tab="importSection">数据导入</button>
+        <button class="tab-btn" id="tabMonitorBtn" data-tab="monitorSection">任务监控</button>
+      </div>
+
+      <!-- 选项卡内容 1: 导入 -->
+      <section class="tab-content active" id="importSection">
+        <div class="card">
+          <div class="card-header">
+            <h3>粘贴谷歌表格数据</h3>
+            <span class="hint">直接从 Google Sheets 复制单元格并粘贴到下方</span>
+          </div>
+          <div class="input-wrapper">
+            <textarea id="csvInput" placeholder="在此处粘贴从表格复制的数据...&#10;第 1 行会自动识别为列名，例如：&#10;名字&#9;视频标题&#9;邮箱&#10;张三&#9;自我介绍&#9;zhang@test.com&#10;李四&#9;产品推介&#9;li@test.com"></textarea>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-secondary" id="clearInputBtn">清空输入</button>
+            <button class="btn btn-primary" id="parseBtn">解析并预览</button>
+          </div>
+        </div>
+
+        <!-- 预览区域 -->
+        <div class="card hidden" id="previewCard">
+          <div class="card-header">
+            <h3>数据预览 (<span id="rowCount">0</span> 行)</h3>
+          </div>
+          <div class="table-container">
+            <table id="previewTable">
+              <thead>
+                <tr id="tableHeader"></tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-primary w-full" id="startBtn">导入并启动自动化</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 选项卡内容 2: 监控 -->
+      <section class="tab-content" id="monitorSection">
+        <!-- 进度卡片 -->
+        <div class="card progress-card">
+          <div class="progress-info">
+            <div class="progress-text">
+              <span class="label">任务进度</span>
+              <span class="value" id="progressVal">0/0 (0%)</span>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar" id="progressBar"></div>
+            </div>
+          </div>
+          <div class="control-actions">
+            <button class="btn btn-action" id="actionPlayPauseBtn" disabled>
+              <svg class="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <svg class="icon-pause hidden" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              <span id="playPauseBtnText">启动</span>
+            </button>
+            <button class="btn btn-secondary btn-action" id="actionResetBtn" disabled>
+              <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+              <span>清空重置</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 日志卡片 -->
+        <div class="card log-card">
+          <div class="card-header">
+            <h3>执行日志</h3>
+            <button class="btn btn-text" id="clearLogBtn">清空</button>
+          </div>
+          <div class="log-terminal" id="logTerminal">
+            <div class="log-line system">系统已就绪。请导入数据开始自动化操作。</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 底部状态栏 -->
+    <footer class="app-footer">
+      <span class="version">v1.0.0</span>
+      <span class="tips">提示：请确保浏览器当前标签页正处于 HeyGen 页面。</span>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
