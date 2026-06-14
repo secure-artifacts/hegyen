@@ -144,6 +144,34 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
+    // --- 新增需求：每条话术数据的最前面加上 <break time="0.5s" /> ---
+    const scriptKeys = ['script', 'Script', '文本', '脚本', '内容', 'text', 'Text', '话术', '视频话术', '话术内容'];
+    dataRows.forEach(rowObj => {
+      // 寻找最匹配话术内容的列键
+      let matchedKey = null;
+      for (const key of scriptKeys) {
+        if (rowObj[key] !== undefined) {
+          matchedKey = key;
+          break;
+        }
+      }
+      // 如果没有找到匹配的键，默认使用第一个键
+      if (!matchedKey) {
+        const keys = Object.keys(rowObj);
+        if (keys.length > 0) {
+          matchedKey = keys[0];
+        }
+      }
+      
+      if (matchedKey && typeof rowObj[matchedKey] === 'string') {
+        const val = rowObj[matchedKey].trim();
+        // 避免重复添加
+        if (val && !val.startsWith('<break time="0.5s" />')) {
+          rowObj[matchedKey] = '<break time="0.5s" /> ' + val;
+        }
+      }
+    });
+
     return { headers, rows: dataRows };
   }
 
