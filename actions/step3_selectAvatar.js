@@ -42,25 +42,35 @@ window.heygenActions.triggerPhysicalClick = function(element) {
   console.log(`[HeyGen Automation] 已成功对元素触发完整物理点击事件链，定位: (${clientX}, ${clientY})`);
 };
 
-// 辅助方法：寻找侧边栏的 Avatar 属性行按钮（支持中英文）
+// 辅助方法：寻找侧边栏的 Avatar 属性行按钮（支持中、英、法文）
 window.heygenActions.findAvatarRowButton = function() {
   const subSections = document.querySelectorAll('[data-pacific-component="SceneSubSection"]');
   for (const section of subSections) {
     const header = section.querySelector('.tw-text-textTitle');
     if (header) {
       const text = header.textContent.trim().toLowerCase();
-      if (text === 'avatar' || text === '头像') {
+      if (
+        text === 'avatar' || 
+        text === '头像' || 
+        text.includes('avatar') || 
+        text.includes('头像')
+      ) {
         const rowButton = section.querySelector('[data-pacific-component="SceneRowButton"]');
         if (rowButton) return rowButton;
       }
     }
   }
   
-  // 备用方案 1：模糊搜索包含 Ava、Avatar 或 头像 的 SceneRowButton
+  // 备用方案 1：模糊搜索包含 Ava、Avatar、头像、Look 的 SceneRowButton
   const rowButtons = document.querySelectorAll('[data-pacific-component="SceneRowButton"]');
   for (const btn of rowButtons) {
     const text = btn.textContent.toLowerCase();
-    if (text.includes('avatar') || text.includes('ava') || text.includes('头像')) {
+    if (
+      text.includes('avatar') || 
+      text.includes('ava') || 
+      text.includes('头像') || 
+      text.includes('look')
+    ) {
       return btn;
     }
   }
@@ -102,12 +112,19 @@ window.heygenActions.findAvatarCardByIndex = function(rowIndex) {
     }
   }
   
-  // 1.2. 备用：通过“Design with AI”按钮定位
+  // 1.2. 备用：通过“Design with AI”等按钮定位（支持中、英、法文）
   if (!drawerContainer) {
     const buttons = document.querySelectorAll('button');
     for (const btn of buttons) {
-      if (btn.textContent && (btn.textContent.includes('Design with AI') || btn.textContent.includes('Upload look'))) {
-        drawerContainer = btn.closest('div[style*="1380px"]') || btn.closest('div[style*="1380"]') || btn.closest('.tw-relative.tw-size-full');
+      const text = btn.textContent || '';
+      if (
+        text.includes('Design with AI') || 
+        text.includes('Upload look') || 
+        text.includes('Upload') ||
+        text.includes('Concevoir avec') || 
+        text.includes('Téléverser')
+      ) {
+        drawerContainer = btn.closest('div[style*="1380px"]') || btn.closest('div[style*="1380"]') || btn.closest('.tw-relative.tw-size-full') || btn.closest('.tw-relative');
         if (drawerContainer) break;
       }
     }
@@ -118,59 +135,99 @@ window.heygenActions.findAvatarCardByIndex = function(rowIndex) {
     drawerContainer = document.querySelector('div[style*="1380px"], div[style*="1380"]');
   }
   
-  if (!drawerContainer) return null;
+  if (!drawerContainer) {
+    console.warn('[HeyGen Automation] 未能定位到头像抽屉容器。');
+    return null;
+  }
   
-  // 2. 找到该容器下所有的绝对定位卡片
-  const allAbsoluteDivs = drawerContainer.querySelectorAll('div.tw-absolute');
-  const allCards = Array.from(allAbsoluteDivs).filter(div => {
-    // 过滤出那些带有 width 和 height 样式的真正头像元素卡片
-    return div.style.width && div.style.height;
+  // 2. 找到所有可见的头像图片
+  const imgs = Array.from(drawerContainer.querySelectorAll('img')).filter(img => {
+    const rect = img.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
   });
   
-  // 3. 对卡片按照 parentElement 进行分组，找到包含最多卡片的那个父级容器作为主网格，防止 DOM 结构变动或多层嵌套带来的判断偏差
-  const cardGroups = new Map();
-  for (const card of allCards) {
-    const parent = card.parentElement;
-    if (!cardGroups.has(parent)) {
-      cardGroups.set(parent, []);
-    }
-    cardGroups.get(parent).push(card);
+  if (imgs.length === 0) {
+    console.warn('[HeyGen Automation] 未在头像抽屉中找到任何可见的 img 元素。');
+    return null;
   }
   
-  let bestParent = null;
-  let maxCount = 0;
-  for (const [parent, group] of cardGroups.entries()) {
-    if (group.length > maxCount) {
-      maxCount = group.length;
-      bestParent = parent;
+  // 3. 寻找最贴近这些图片的网格容器 (Grid Container)
+  // 通过统计每个祖先节点包含的图片数和它的 DOM 深度来确定
+  const ancestorCounts = new Map();
+  const getElementDepth = (el) => {
+    let depth = 0, cur = el;
+    while (cur) { depth++; cur = cur.parentElement; }
+    return depth;
+  };
+  
+  for (const img of imgs) {
+    let parent = img.parentElement;
+    while (parent && parent !== drawerContainer) {
+      ancestorCounts.set(parent, (ancestorCounts.get(parent) || 0) + 1);
+      parent = parent.parentElement;
     }
   }
   
-  const cards = bestParent ? cardGroups.get(bestParent) : [];
-  console.log(`[HeyGen Automation] 成功在头像抽屉内锁定网格容器，包含卡片数量: ${cards.length}`);
+  let bestGridContainer = null;
+  let maxImgs = 0;
+  let maxDepth = 0;
   
-  // 正常顺序索引应该为 rowIndex + 1 (因为第 0 个是 Design with AI 等按钮，第 1 个是首行手选的头像)
-  const targetIndex = rowIndex + 1;
+  for (const [ancestor, imgCount] of ancestorCounts.entries()) {
+    if (imgCount > maxImgs) {
+      maxImgs = imgCount;
+      bestGridContainer = ancestor;
+      maxDepth = getElementDepth(ancestor);
+    } else if (imgCount === maxImgs) {
+      const depth = getElementDepth(ancestor);
+      if (depth > maxDepth) {
+        bestGridContainer = ancestor;
+        maxDepth = depth;
+      }
+    }
+  }
   
-  if (targetIndex < cards.length) {
-    // 还在范围内，按顺序选择卡片
-    console.log(`[HeyGen Automation] 场景索引: ${rowIndex}，按顺序映射到头像卡片索引: ${targetIndex} (列表中第 ${targetIndex + 1} 个元素)`);
-    return cards[targetIndex];
+  // 4. 获取网格容器下的子节点作为候选卡片
+  let cards = [];
+  if (bestGridContainer) {
+    cards = Array.from(bestGridContainer.children);
+    console.log(`[HeyGen Automation] 智能识别出网格容器，包含子节点数: ${cards.length}, 内部含可见图片数: ${maxImgs}`);
   } else {
-    // 超出范围：排除第 0 个（AI辅助按钮）和第 1 个（即第二个头像，您首行手选的那个）
-    // 从第 2 个头像卡片 (index 2) 开始到最后一个卡片之间随机选择
-    const minIndex = 2;
-    const maxIndex = cards.length - 1;
+    // 兜底旧逻辑
+    const allAbsoluteDivs = drawerContainer.querySelectorAll('div.tw-absolute');
+    cards = Array.from(allAbsoluteDivs).filter(div => {
+      return (div.style.width && div.style.height) || div.querySelector('img');
+    });
+    console.log(`[HeyGen Automation] 备用方案锁定网格卡片，卡片数: ${cards.length}`);
+  }
+  
+  // 5. 过滤出真正具有头像图片的卡片 (避开 Design with AI, Upload 等纯文字/按钮卡片)
+  const avatarCards = cards.filter(card => {
+    return !!card.querySelector('img');
+  });
+  
+  console.log(`[HeyGen Automation] 过滤后的头像卡片数量: ${avatarCards.length}`);
+  
+  if (avatarCards.length === 0) {
+    return null;
+  }
+  
+  // 6. 根据 rowIndex 进行选择
+  if (rowIndex < avatarCards.length) {
+    console.log(`[HeyGen Automation] 场景索引: ${rowIndex}，对应选择第 ${rowIndex} 个头像 (DOM 列表中的第 ${cards.indexOf(avatarCards[rowIndex])} 个子节点)`);
+    return avatarCards[rowIndex];
+  } else {
+    // 超出范围：排除第 0 个头像（对应 rowIndex=0 时跳过保留的那个，即首行手选的头像）
+    // 从第 1 个头像开始到最后一个头像之间随机选择
+    const minIndex = 1;
+    const maxIndex = avatarCards.length - 1;
     
     if (maxIndex >= minIndex) {
-      // 随机生成 [minIndex, maxIndex] 之间的整数
       const randomIndex = Math.floor(Math.random() * (maxIndex - minIndex + 1)) + minIndex;
-      console.log(`[HeyGen Automation] 场景索引: ${rowIndex} 已超出可用头像数。排除第2张（手选头像）后，随机选择卡片索引: ${randomIndex} (列表中第 ${randomIndex + 1} 个元素)`);
-      return cards[randomIndex];
+      console.log(`[HeyGen Automation] 场景索引: ${rowIndex} 已超出可用头像数。排除首张（手选头像）后，随机选择头像索引: ${randomIndex}`);
+      return avatarCards[randomIndex];
     } else {
-      // 兜底：如果列表中只有 2 个元素（Design with AI 和 1 个头像），只能返回这唯一的头像（index 1）
-      console.log(`[HeyGen Automation] 头像数量不足以排除，只能选择唯一的头像索引 1`);
-      return cards[1];
+      console.log(`[HeyGen Automation] 头像数量不足以排除，只能选择唯一的头像索引 0`);
+      return avatarCards[0];
     }
   }
 };
@@ -188,10 +245,10 @@ window.heygenActions.waitForAvatarCard = async function(rowIndex, timeout = 1000
     }
     await this.sleep(100);
   }
-  throw new Error(`未在头像抽屉中找到第 ${rowIndex + 1} 行数据对应位置的头像卡片。`);
+  throw new Error(`未在头像抽屉中找到第 ${rowIndex + 1} 行数据对应位置 of 头像卡片。`);
 };
 
-// 辅助方法：检查“Avatar Background”属性组件是否已经出现（支持中英文）
+// 辅助方法：检查“Avatar Background”属性组件是否已经出现（支持中、英、法文）
 window.heygenActions.isAvatarBackgroundPresent = function() {
   const subSections = document.querySelectorAll('[data-pacific-component="SceneSubSection"]');
   for (const section of subSections) {
@@ -202,7 +259,9 @@ window.heygenActions.isAvatarBackgroundPresent = function() {
         text === 'avatar background' || 
         text === '头像背景' || 
         text.includes('background') || 
-        text.includes('背景')
+        text.includes('背景') ||
+        text.includes('arrière-plan') || 
+        text.includes('fond')
       ) {
         const rect = section.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
@@ -229,6 +288,50 @@ window.heygenActions.waitForAvatarBackground = async function(timeout = 2500) {
   return false;
 };
 
+// 辅助方法：自动点击返回/关闭按钮，退出头像选择抽屉
+window.heygenActions.closeAvatarDrawer = function() {
+  const headerBtn = document.querySelector('[data-pacific-component="SceneAvatarSwitcherHeader"]');
+  if (!headerBtn) return;
+  
+  let drawerContainer = null;
+  let current = headerBtn.parentElement;
+  while (current && current !== document.body) {
+    const style = current.getAttribute('style') || '';
+    if (style.includes('1380px') || style.includes('1380') || current.classList.contains('tw-relative')) {
+      drawerContainer = current;
+      break;
+    }
+    current = current.parentElement;
+  }
+  if (!drawerContainer) {
+    drawerContainer = headerBtn.closest('.tw-relative') || headerBtn.parentElement?.parentElement;
+  }
+  
+  if (!drawerContainer) return;
+  
+  // 1. 优先查找返回图标（use href="#arrowleft"）
+  const useArrowLeft = drawerContainer.querySelector('svg use[href="#arrowleft"], svg use[*|href="#arrowleft"]');
+  if (useArrowLeft) {
+    const svgEl = useArrowLeft.closest('svg');
+    if (svgEl) {
+      console.log('[HeyGen Automation] 检测到返回按钮 (#arrowleft)，正在执行物理点击...');
+      this.triggerPhysicalClick(svgEl);
+      return;
+    }
+  }
+  
+  // 2. 兜底查找关闭图标（use href="#close"）
+  const useClose = drawerContainer.querySelector('svg use[href="#close"], svg use[*|href="#close"]');
+  if (useClose) {
+    const svgEl = useClose.closest('svg');
+    if (svgEl) {
+      console.log('[HeyGen Automation] 检测到关闭按钮 (#close)，正在执行物理点击...');
+      this.triggerPhysicalClick(svgEl);
+      return;
+    }
+  }
+};
+
 // 核心执行步骤：更换当前场景的头像
 window.heygenActions.selectAvatarStep = async function(targetSegment, rowIndex) {
   if (rowIndex === 0) {
@@ -238,67 +341,62 @@ window.heygenActions.selectAvatarStep = async function(targetSegment, rowIndex) 
   
   console.log(`[HeyGen Automation] 开始为第 ${rowIndex + 1} 个场景更换头像...`);
   
-  // 1. 将场景滚动到视口中央
+  // 1. 将场景滚动到视口中央并触发物理点击选中它，以刷新右侧属性面板显示当前场景的属性
   targetSegment.scrollIntoView({ behavior: 'auto', block: 'center' });
   await this.sleep(400); // 滚动等待
   
-  // 2. 利用 Range 选区和 Focus 强制更新 ProseMirror 的活动场景
+  console.log(`[HeyGen Automation] 正在物理点击选中第 ${rowIndex + 1} 个场景...`);
+  const sceneNum = targetSegment.querySelector('[data-pacific-component="SceneNumber"]');
+  if (sceneNum) {
+    this.triggerPhysicalClick(sceneNum);
+  } else {
+    const sceneWrapper = targetSegment.querySelector('[data-scene-id]') || targetSegment;
+    this.triggerPhysicalClick(sceneWrapper);
+  }
+  await this.sleep(500); // 给面板刷新留出足够时间，确保不处于编辑话术的状态下加载
+  
+  // 2. 利用 Range 选区和 Focus 辅助激活 ProseMirror 编辑器选区，但保留焦点在此行（不调用 inputEl.focus() 以免右侧属性栏自动切换到语音）
   let inputEl = null;
   try {
-    inputEl = await this.waitForSegmentInput(rowIndex, 5000);
+    inputEl = await this.waitForSegmentInput(rowIndex, 3000);
   } catch (e) {
-    console.warn(`[HeyGen Automation] 无法定位到当前场景的输入框，采用备用激活逻辑:`, e);
+    console.warn(`[HeyGen Automation] 无法定位到当前场景的输入框，仅采用场景卡片物理激活:`, e);
   }
   
   if (inputEl) {
-    console.log(`[HeyGen Automation] 正在将编辑器光标和选区移至第 ${rowIndex + 1} 个场景...`);
-    const editor = document.querySelector('.ProseMirror');
-    if (editor) {
-      editor.focus();
-    }
-    
-    // 模拟点击输入区
-    this.simulateClick(targetSegment);
-    inputEl.focus();
-    await this.sleep(100);
-    
-    // 强制设置浏览器 Selection 选区，迫使 ProseMirror 状态管理器将 active 场景切换为当前行
+    console.log(`[HeyGen Automation] 正在同步编辑器光标/选区到第 ${rowIndex + 1} 个场景...`);
     const selection = window.getSelection();
     selection.removeAllRanges();
     const range = document.createRange();
     range.selectNodeContents(inputEl);
     selection.addRange(range);
     
-    // 触发事件让 ProseMirror 确认选区变更
     inputEl.dispatchEvent(new Event('input', { bubbles: true }));
     inputEl.dispatchEvent(new Event('focus', { bubbles: true }));
     await this.sleep(100);
-  } else {
-    // 兜底激活逻辑
-    const sceneNum = targetSegment.querySelector('[data-pacific-component="SceneNumber"]');
-    if (sceneNum) {
-      this.triggerPhysicalClick(sceneNum);
-    } else {
-      this.triggerPhysicalClick(targetSegment);
-    }
   }
   
-  // 留出时间等待右侧属性面板刷新
-  console.log(`[HeyGen Automation] 等待 1.5 秒以供属性面板刷新为第 ${rowIndex + 1} 个场景的属性...`);
-  await this.sleep(1500); // 增加等待右侧面板刷新的时间到 1.5s
+  // 留出时间等待右侧属性面板刷新完毕
+  console.log(`[HeyGen Automation] 等待 1.2 秒以供属性面板刷新为第 ${rowIndex + 1} 个场景的属性...`);
+  await this.sleep(1200);
   
-  // 3. 寻找并点击 Avatar 行按钮打开头像库面板
-  const avatarRowBtn = await this.waitForAvatarRowButton(6000);
-  console.log(`[HeyGen Automation] 找到 Avatar 按钮，正在触发物理点击...`);
-  this.triggerPhysicalClick(avatarRowBtn);
-  
-  // 等待头像库抽屉完全展开渲染
-  console.log(`[HeyGen Automation] 等待头像面板展开 (1.5 秒)...`);
-  await this.sleep(1500); // 增加等待时间至 1.5s
+  // 3. 检查头像库抽屉是否已经打开 (可以通过寻找 SceneAvatarSwitcherHeader 头部组件来判断)
+  const isDrawerOpen = !!document.querySelector('[data-pacific-component="SceneAvatarSwitcherHeader"]');
+  if (isDrawerOpen) {
+    console.log(`[HeyGen Automation] 检测到头像面板已经处于打开状态，无需再次点击 Avatar 按钮。`);
+  } else {
+    const avatarRowBtn = await this.waitForAvatarRowButton(6000);
+    console.log(`[HeyGen Automation] 找到 Avatar 按钮，正在触发物理点击...`);
+    this.triggerPhysicalClick(avatarRowBtn);
+    
+    // 等待头像库抽屉完全展开渲染
+    console.log(`[HeyGen Automation] 等待头像面板展开 (1.5 秒)...`);
+    await this.sleep(1500);
+  }
   
   // 4. 定位并点击对应索引位置的头像卡片
   const targetCard = await this.waitForAvatarCard(rowIndex, 10000);
-  console.log(`[HeyGen Automation] 成功定位到第 ${rowIndex + 1} 个场景对应的头像卡片。进行多重物理点击以确保生效...`);
+  console.log(`[HeyGen Automation] 成功定位到第 ${rowIndex + 1} 个场景对应的头像卡片。准备进行单次物理点击...`);
   
   // 查找卡片内的 img
   const targetImg = targetCard.querySelector('img');
@@ -316,26 +414,23 @@ window.heygenActions.selectAvatarStep = async function(targetSegment, rowIndex) 
   // 寻找卡片内部具有 cursor-pointer 类的元素
   const cardWrapper = targetCard.querySelector('.tw-cursor-pointer') || targetCard;
   
-  // 对这三个可能绑定了点击事件的元素依次发送物理点击，覆盖所有 React 状态绑定的可能性
+  // 确定最终的点击目标 (只进行一次精准物理点击，防止多重点击触发 deselect 或 React 状态冲突)
+  let clickTarget = null;
   if (overlay) {
-    console.log('[HeyGen Automation] 点击卡片遮罩层 div.tw-z-[8]');
-    this.triggerPhysicalClick(overlay);
-    await this.sleep(100);
-  }
-  
-  if (cardWrapper && cardWrapper !== overlay) {
-    console.log('[HeyGen Automation] 点击外层卡片容器 .tw-cursor-pointer');
-    this.triggerPhysicalClick(cardWrapper);
-    await this.sleep(100);
-  }
-  
-  if (targetImg) {
-    console.log('[HeyGen Automation] 点击卡片内部 img 图片');
-    this.triggerPhysicalClick(targetImg);
+    console.log('[HeyGen Automation] 确定点击卡片遮罩层 div.tw-z-[8]');
+    clickTarget = overlay;
+  } else if (targetImg) {
+    console.log('[HeyGen Automation] 确定点击卡片内部 img 图片');
+    clickTarget = targetImg;
+  } else if (cardWrapper) {
+    console.log('[HeyGen Automation] 确定点击外层卡片容器 .tw-cursor-pointer');
+    clickTarget = cardWrapper;
   } else {
-    // 兜底直接点击整个卡片容器本身
-    this.triggerPhysicalClick(targetCard);
+    console.log('[HeyGen Automation] 确定点击卡片容器本身');
+    clickTarget = targetCard;
   }
+  
+  this.triggerPhysicalClick(clickTarget);
   
   // 5. 等待头像切换完成（动态检测 Avatar Background 组件是否出现，最长等待 2.5 秒作为安全兜底）
   console.log(`[HeyGen Automation] 已发送点击，正在动态等待 Avatar Background 属性加载完成 (最长 2.5 秒)...`);
@@ -344,6 +439,8 @@ window.heygenActions.selectAvatarStep = async function(targetSegment, rowIndex) 
     // 检测到成功应用后，额外休眠 300ms 保证 React 状态稳定
     await this.sleep(300);
   }
+  
+  // 提示：已根据用户手动测试结论，移除了自动返回 closeAvatarDrawer() 调用，让抽屉在各 Scene 执行间保持开启以提升运行效率。
   console.log(`[HeyGen Automation] 第 ${rowIndex + 1} 个场景头像更换动作执行完毕。`);
 };
 
@@ -356,7 +453,9 @@ window.heygenActions.findAvatarVersionButton = function() {
     if (header && (
       header.textContent.trim().toLowerCase() === 'motion engine' || 
       header.textContent.trim() === '动作引擎' || 
-      header.textContent.trim() === '运动引擎'
+      header.textContent.trim() === '运动引擎' ||
+      header.textContent.trim().toLowerCase().includes('motion') ||
+      header.textContent.trim().toLowerCase().includes('mouvement')
     )) {
       // 在这个区块里寻找下拉按钮 (带有 aria-haspopup="menu" 的 button)
       const button = section.querySelector('button[aria-haspopup="menu"]');

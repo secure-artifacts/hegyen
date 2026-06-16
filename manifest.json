@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HeyGen 自动操作助手",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "针对 app.heygen.com 的自动化点击与输入插件，支持谷歌表格数据解析。",
   "permissions": [
     "storage",
