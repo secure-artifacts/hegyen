@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // --- 新增需求：每条话术数据的最前面加上 <break time="0.5s" /> ---
+    // --- 新增需求：每条话术数据的最后面加上 <break time="0.5s" /> ---
     const scriptKeys = ['script', 'Script', '文本', '脚本', '内容', 'text', 'Text', '话术', '视频话术', '话术内容'];
     dataRows.forEach(rowObj => {
       // 寻找最匹配话术内容的列键
@@ -166,8 +166,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (matchedKey && typeof rowObj[matchedKey] === 'string') {
         const val = rowObj[matchedKey].trim();
         // 避免重复添加
-        if (val && !val.startsWith('<break time="0.5s" />')) {
-          rowObj[matchedKey] = '<break time="0.5s" /> ' + val;
+        if (val && !val.endsWith('<break time="0.5s" />')) {
+          rowObj[matchedKey] = val + ' <break time="0.5s" />';
         }
       }
     });
